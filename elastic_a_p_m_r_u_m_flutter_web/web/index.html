@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    Alternatively, build your application passing the --base-href parameter
+    specifying the new root path of your web app.
+
+    Fore more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Elastic APM RUM Flutter Web">
+
+  <!-- Elastic APM RUM Agent -->
+  <script src="elastic-apm-rum.umd.min.js" crossorigin></script>
+  
+  <script>
+    console.log('[RUM] Initializing APM...');
+
+    try {
+      window.apm = elasticApm.init({
+        serviceName: 'portal-ui-application-rum',
+        serverUrl: 'http://127.0.0.1:8200',
+        environment: 'dev',
+        transactionSampleRate: 1.0,
+        centralConfig: false,
+        logLevel: 'debug',
+        distributedTracingOrigins: ['http://localhost:8080', 'http://127.0.0.1:8080']
+      });
+      console.log('[RUM] APM initialized successfully:', window.apm);
+    } catch (e) {
+      console.error('[RUM] APM initialization failed:', e);
+    }
+
+    // Flutter-Dart Bridge
+    window.ffRum = {
+      currentTransaction: null,
+      currentSpan: null,
+      spanStack: [],
+
+      startTransaction: function (name, type) {
+        console.log('[RUM] startTransaction called', { name: name, type: type || 'custom' });
+        try {
+          if (!apm) {
+            console.error('[RUM] APM not initialized');
+            return null;
+          }
+
+          if (typeof apm.startTransaction !== 'function') {
+            console.error('[RUM] apm.startTransaction is not a function');
+            return null;
+          }
+
+          // End any existing transaction first
+          if (window.ffRum.currentTransaction) {
+            console.log('[RUM] Ending existing transaction before starting new one');
+            window.ffRum.endTransaction();
+          }
+
+          const tx = apm.startTransaction(name, type || 'custom');
+          console.log('[RUM] startTransaction result:', tx);
+          
+          if (tx) {
+            window.ffRum.currentTransaction = tx;
+            window.ffRum.currentSpan = null;
+            window.ffRum.spanStack = [];
+            console.log('[RUM] Transaction stored:', tx);
+          }
+          return tx;
+        } catch (e) {
+          console.error('[RUM] startTransaction error:', e);
+          return null;
+        }
+      },
+
+      endTransaction: function () {
+        console.log('[RUM] endTransaction called');
+        try {
+          const t = window.ffRum.currentTransaction;
+          console.log('[RUM] Using stored transaction:', t);
+          
+          if (t) {
+            if (!t.ended) {
+              t.end();
+              console.log('[RUM] Transaction ended successfully');
+            } else {
+              console.log('[RUM] Transaction was already ended');
+            }
+            
+            window.ffRum.currentTransaction = null;
+            window.ffRum.currentSpan = null;
+            window.ffRum.spanStack = [];
+          } else {
+            console.warn('[RUM] endTransaction: no stored transaction');
+          }
+        } catch (e) {
+          console.error('[RUM] endTransaction error:', e);
+        }
+      },
+
+      startSpan: function (name, type) {
+        console.log('[RUM] startSpan called', { name: name, type: type || 'custom' });
+        try {
+          const currentTx = window.ffRum.currentTransaction;
+          if (!currentTx) {
+            console.warn('[RUM] startSpan: no current transaction');
+            return null;
+          }
+
+          const span = currentTx.startSpan(name, type || 'custom');
+          console.log('[RUM] startSpan result:', span);
+          
+          if (span) {
+            window.ffRum.currentSpan = span;
+            window.ffRum.spanStack.push(span);
+            console.log('[RUM] Span stored, stack length:', window.ffRum.spanStack.length);
+          }
+          
+          return span;
+        } catch (e) {
+          console.error('[RUM] startSpan error:', e);
+          return null;
+        }
+      },
+
+      endSpan: function () {
+        console.log('[RUM] endSpan called');
+        try {
+          if (window.ffRum.spanStack.length === 0) {
+            console.warn('[RUM] endSpan: no spans in stack');
+            return;
+          }
+
+          const span = window.ffRum.spanStack.pop();
+          console.log('[RUM] Ending span:', span);
+          
+          if (span && !span.ended) {
+            span.end();
+            console.log('[RUM] Span ended successfully');
+          } else if (span && span.ended) {
+            console.log('[RUM] Span was already ended');
+          }
+
+          window.ffRum.currentSpan = window.ffRum.spanStack.length > 0 
+            ? window.ffRum.spanStack[window.ffRum.spanStack.length - 1] 
+            : null;
+            
+          console.log('[RUM] Updated current span, stack length:', window.ffRum.spanStack.length);
+        } catch (e) {
+          console.error('[RUM] endSpan error:', e);
+        }
+      },
+
+      addLabels: function (labels) {
+        try {
+          const t = window.ffRum.currentTransaction;
+          if (!t || !labels || typeof labels !== 'object') return;
+          
+          t.addLabels(labels);
+          console.log('[RUM] Labels added:', labels);
+        } catch (e) {
+          console.error('[RUM] addLabels error:', e);
+        }
+      },
+    };
+
+    console.log('[RUM] ffRum wrapper created:', window.ffRum);
+  </script>
+
+  <meta name="robots" content="noindex" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png" />
+
+  <!-- Open Graph & SEO tags -->
+  <meta property="og:title" content="Elastic APM RUM Flutter Web" />
+  <meta property="og:description" content="Built with FlutterFlow." />
+  <meta property="og:image" content="https://storage.googleapis.com/flutterflow-prod-hosting/og_splash_gradient.png" /> 
+  <meta name="twitter:title" content="Elastic APM RUM Flutter Web" />
+  <meta name="twitter:description" content="Built with FlutterFlow." />
+  <meta name="twitter:image" content="https://storage.googleapis.com/flutterflow-prod-hosting/og_splash_gradient.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <title> Elastic APM RUM Flutter Web </title>
+  <meta name="description" content="Built with FlutterFlow." />
+    
+
+  <!-- Status Bar color in Safari browser (iOS) and PWA -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1f4f8">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)"  content="#1d2428">
+
+  <link rel="manifest" href="manifest.json">
+  
+</head>
+<body>
+  
+  
+  
+  
+  
+  <script>
+    {{flutter_bootstrap_js}}
+  </script>
+</body>
+</html>

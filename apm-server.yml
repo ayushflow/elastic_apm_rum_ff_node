@@ -1,0 +1,32 @@
+apm-server:
+  host: "0.0.0.0:8200"
+
+  # Real User Monitoring intake (browser)
+  rum:
+    enabled: true
+    allow_origins: ["*"]
+    allow_headers: ["*"]
+
+# We do NOT need APM Server to connect to Kibana for this lab.
+# (If you later want central config via Kibana, you can add apm-server.kibana with credentials.)
+# apm-server:
+#   kibana:
+#     enabled: true
+#     host: "http://kib:5601"
+#     username: "kibana_system"
+#     password: "..."
+
+auth:
+  anonymous:
+    enabled: true
+    rate_limit:
+      event_limit: 300
+      ip_limit: 1000
+
+output.elasticsearch:
+  hosts: ["http://es:9200"]
+  username: "elastic"
+  password: "${ELASTICSEARCH_PASSWORD}"
+
+logging:
+  level: info
